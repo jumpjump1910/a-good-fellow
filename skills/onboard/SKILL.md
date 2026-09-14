@@ -428,6 +428,12 @@ Read those exact deployment paths directly. Do not invoke a global slash command
 Skill registry entry: interactive skills may be symlinks to a mutable checkout, while
 the files above are the immutable runtime selected for this sweep.
 
+One exception to the order: first run
+$REPO_DIR/skills/fix-assigned-issues/scripts/issue-stage.sh show. If it prints any
+staged issue, execute fix-assigned-issues' staged-resume step (its Step 2) before
+process-prs, so an in-progress large issue is not starved by the PR sweep again; then
+run the four skills in order (fix-assigned-issues skips issues already resumed).
+
 The hard deadline is epoch $GOOD_FELLOW_RUN_DEADLINE_EPOCH; stop new work at
 $GOOD_FELLOW_RUN_STOP_AT_EPOCH. Do not begin a nontrivial PR review with fewer than
 $GOOD_FELLOW_MIN_REVIEW_SECONDS seconds remaining. Prefer deferring over a shallow

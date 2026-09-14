@@ -135,8 +135,11 @@ VERSION_RUNNER="$DEPLOY_DIR/run-good-fellow.sh"
   budget (`ANTHROPIC_MODEL=claude-opus-5` in `~/.good-fellow/env`, which the runner
   exports) and re-running `/onboard` if the runner is the stale part.
 - **Stale worktrees.** `ls ~/.good-fellow/worktrees/` piling up means runs are dying
-  before cleanup. Left in place deliberately after failures, but a large backlog is a
-  signal — offer to prune with `git worktree prune` per repo.
+  before cleanup. First exclude intentional ones: paths printed by
+  `<repo-root>/skills/fix-assigned-issues/scripts/issue-stage.sh staged-workspaces`
+  hold staged in-progress issue work and must not be pruned. Beyond those, leftovers
+  stay in place deliberately after failures, but a large backlog is a signal — offer
+  to prune with `git worktree prune` per repo.
 - **Malformed queue state.** `pr-queue: ignoring malformed cursor` or
   `pr-handoff: ignoring invalid state file` is recoverable: healthy rows continue and
   the next cursor advance replaces a bad cursor. Report the affected path; repeated
