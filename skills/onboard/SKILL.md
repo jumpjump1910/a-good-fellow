@@ -463,7 +463,11 @@ run_agent() {
     codex)  CODEX_HOME="$DEPLOY_DIR/codex-home" $TIMEOUT_CMD codex exec \
               --ignore-user-config --ephemeral --dangerously-bypass-approvals-and-sandbox \
               "$PROMPT" 9>&- ;;
-    cursor) $TIMEOUT_CMD cursor-agent --print --force "$PROMPT" 9>&- ;;
+    # Default Grok 4.7 High is the 500k-context variant. cursor-agent rejects
+    # bracket overrides such as [context=500k]; the id grok-4.7-high is that
+    # default. Without --model the CLI inherits the interactive account's
+    # current model instead of this fallback.
+    cursor) $TIMEOUT_CMD cursor-agent --print --force --model grok-4.7-high "$PROMPT" 9>&- ;;
   esac
 }
 
