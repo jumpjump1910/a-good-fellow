@@ -141,6 +141,44 @@ This is how later sweeps recognize work that is already done. Do not omit it, an
 not add visible boilerplate ("as an AI...", "automated review") unless the gist asks
 for it.
 
+### Visible signature
+
+Immediately before the hidden marker, every comment, review, reply, and PR body must
+carry one visible signature line. Reviewers on GitHub cannot see the hidden marker, so
+this is the only human-legible way to know which model produced the text and which
+revision of the user's personal instructions it followed:
+
+```
+— <model name>, instructions ~<word count> words (rev <fingerprint>)
+<!-- good-fellow:v1 -->
+```
+
+- `<model name>`: the exact model identity you are currently running as (vendor and
+  name/version, e.g. "Claude Opus 5", "GPT-5"), taken from your own system/developer
+  context. Never hardcode or guess a fixed value — this skill set runs under different
+  agents and model versions over time, and the signature exists precisely so a human
+  can tell them apart.
+- `<word count>`: an approximate word count of the cached instructions actually read
+  for this task (`~/.good-fellow/instruction.md`, conventions §1) — exact precision is
+  not needed:
+
+  ```bash
+  wc -w < ~/.good-fellow/instruction.md
+  ```
+- `<fingerprint>`: the first 8 characters of a checksum of that same cache file, so a
+  reviewer can tell whether two good-fellow comments used the identical instructions
+  without needing gist access:
+
+  ```bash
+  { command -v sha256sum >/dev/null 2>&1 && sha256sum ~/.good-fellow/instruction.md ||
+    shasum -a 256 ~/.good-fellow/instruction.md; } 2>/dev/null | awk '{print substr($1,1,8)}'
+  ```
+
+If the instructions cache is missing (conventions §1's "proceed with defaults" case),
+write `— <model name>, no instruction gist` instead of the word-count/fingerprint
+clause. This line is the one piece of visible boilerplate conventions §4 allows —
+do not add any other.
+
 The marker may carry optional attributes after the version. A PR review records the
 commit it examined, so the next sweep can tell "already reviewed, unchanged" from
 "reviewed, but new commits have landed":

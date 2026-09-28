@@ -66,8 +66,9 @@ Skip when:
 
 Compose a substantive answer: read the relevant repository code if the question is
 technical (clone/worktree per conventions §3 if needed). Match the thread's language
-unless the gist says otherwise. Append the marker. Before expensive repository work,
-check the run deadline; a time-budget deferral gets no receipt.
+unless the gist says otherwise. Append the visible signature and marker (conventions
+§4). Before expensive repository work, check the run deadline; a time-budget deferral
+gets no receipt.
 
 Post as a reply in the mentioning comment's thread when possible, else as a top-level
 comment:
@@ -77,6 +78,7 @@ gh api graphql -f query='mutation($d: ID!, $r: ID, $b: String!) {
   addDiscussionComment(input: {discussionId: $d, replyToId: $r, body: $b}) { comment { url } } }' \
   -f d=<discussionNodeId> -f r=<commentNodeId> -f b="<reply>
 
+— <model name>, instructions ~<word count> words (rev <fingerprint>)
 <!-- good-fellow:v1 -->"
 ```
 

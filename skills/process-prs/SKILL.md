@@ -414,7 +414,11 @@ placeholder or call an unvisited item deferred.
 Build the body from the evidence, beginning clean reviews with `LGTM`, and end with
 exactly one marker bound to snapshot head/base/token and `action=comment|approve`
 plus `verdict=clean|concern|waiting`. Bare `LGTM` is only for unambiguous mechanical
-changes; otherwise name the checked risk areas in 1–3 concrete sentences.
+changes; otherwise name the checked risk areas in 1–3 concrete sentences. Immediately
+above that final marker line, add the visible signature line required by conventions
+§4 (`— <model name>, instructions ~<word count> words (rev <fingerprint>)`) — it is
+the second-to-last non-empty line; `pr-review-guard.sh` only requires the marker
+itself to be the last one.
 
 - New critical findings: one `verdict=concern` comment with file:line and a failing
   scenario, minus ledger duplicates.

@@ -150,7 +150,9 @@ Body structure (language per gist / repo norms):
 - Key changes — brief bullet list.
 - How it was verified — tests run, or honest "not tested" note.
 - `Fixes #<n>` when an issue number was given.
-- The marker line: `<!-- good-fellow:v1 -->`.
+- The visible signature line, then the marker line (conventions §4):
+  `— <model name>, instructions ~<word count> words (rev <fingerprint>)` followed by
+  `<!-- good-fellow:v1 -->`.
 
 No boilerplate beyond that; do not enable auto-merge; do not request reviewers unless
 the gist says to.
