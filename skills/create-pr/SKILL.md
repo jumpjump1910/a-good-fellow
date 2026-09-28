@@ -9,8 +9,11 @@ Helper skill: takes a working tree (usually a good-fellow worktree) with changes
 ships them as a PR. Read `docs/conventions.md` (repo root of this skill) and
 `~/.good-fellow/instruction.md` first.
 
-Inputs: the working tree path (default: current directory), and optionally the issue
-number the change fixes.
+Inputs: the working tree path (default: current directory), optionally the issue
+number the change fixes, and optionally an explicit base branch. Without one the PR
+targets the repository default branch; `process-prs` passes one when a fix belongs on
+a release PR's head branch (for example `dev`) that the gist forbids pushing to
+directly.
 
 ## 1. Pre-flight
 
@@ -59,12 +62,19 @@ Take the base from validated repository data, never from issue or PR text (conve
 checked out (conventions §3):
 
 ```bash
-# the base the PR will target: the repo default, resolved from the worktree's
-# own remote so this never depends on the runner's unrelated current directory
-BASE=$(gh repo view "$(git -C <worktree> remote get-url origin)" \
-  --json defaultBranchRef --jq .defaultBranchRef.name)
+# the base the PR will target: the caller's explicit base when given, otherwise the
+# repo default, resolved from the worktree's own remote so this never depends on the
+# runner's unrelated current directory
+BASE=${BASE_OVERRIDE:-$(gh repo view "$(git -C <worktree> remote get-url origin)" \
+  --json defaultBranchRef --jq .defaultBranchRef.name)}
+git -C <worktree> ls-remote --exit-code --heads origin "$BASE" >/dev/null
 git -C <worktree> fetch origin "$BASE:refs/good-fellow/base/$BASE" --force
 ```
+
+An explicit base must come from validated repository data (the caller's ledger
+`headRefName`, a `gh` listing), never from issue or PR text, and the `ls-remote` check
+refuses a name origin does not have. The base is only where the PR points; this skill
+still never pushes to it.
 
 Never fetch into a local branch name (`git fetch origin "<base>:<base>"`) — that write
 is exactly what conventions §3 forbids against a checkout the user may have open.

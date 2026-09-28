@@ -82,6 +82,10 @@ gh api graphql -f query='mutation($d: ID!, $r: ID, $b: String!) {
 <!-- good-fellow:v1 -->"
 ```
 
+For a long reply written to a file, pass it as `-F b=@"$BODY_FILE"` — never
+`-f b=@...`, which posts the path itself (see `docs/conventions.md`, "Posting a body
+from a file").
+
 After a successful reply, or either covered skip above, record only for an exact
 unread-notification match. Observe that thread first, then refetch the full discussion
 and re-prove that the decision still covers its latest mention:

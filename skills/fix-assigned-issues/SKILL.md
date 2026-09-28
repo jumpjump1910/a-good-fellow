@@ -84,7 +84,8 @@ later sweep retry. An untouched queue tail that was never selected is not a decl
 item and receives no bulk comment.
 
 Capture the confirmed comment's numeric id — from the API response when posting
-(`gh api ... comments -f body=... --jq .id`), or from the reused existing comment when
+(`gh api ... comments -f body="<text>" --jq .id`, or `-F body=@"$BODY_FILE"` for a
+file — never `-f body=@...`), or from the reused existing comment when
 idempotence found one — as `DECLINE_COMMENT_ID`. Step 6 persists it with the receipt so
 cleanup can independently re-fetch and re-verify that exact comment, instead of relying
 only on the aggregate subject digest matching.

@@ -69,7 +69,7 @@ handoff_path() {
 snapshot_values() {
   local snapshot=$1
   # The snapshot is a caller-owned private temp file with no concurrent writer;
-  # the guard re-validates the 11-line format and each field's shape per read.
+  # the guard re-validates the 13-line format and each field's shape per read.
   validate_regular_file "$snapshot" 'snapshot file'
   SNAPSHOT_HEAD=$("$GUARD" head "$snapshot")
   SNAPSHOT_BASE=$("$GUARD" base "$snapshot")

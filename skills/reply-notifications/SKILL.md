@@ -63,6 +63,10 @@ gh api repos/<owner>/<repo>/issues/<number>/comments -f body="<reply>
 <!-- good-fellow:v1 -->"
 ```
 
+For a long reply written to a file, use `-F body=@"$BODY_FILE"` — never
+`-f body=@...`, which posts the path itself (see `docs/conventions.md`, "Posting a body
+from a file").
+
 Substance over ceremony: answer the actual question using the code/thread context;
 never post placeholder acknowledgements ("thanks, will look into it").
 

@@ -15,8 +15,10 @@ as well as GNU/Linux.
    consume the run's time or context:
    - *Your PRs*: judges unresolved comments from Copilot/reviewers; real issues get
      fixed and pushed, then the thread gets a reply and is resolved.
-   - *Others' PRs*: pulls the code locally and reviews for **critical issues only** —
-     no generic summaries, no nits. A clean PR gets a short, concrete review rationale
+   - *Others' PRs*: pulls the code locally and reviews it against your gist's review
+     standards. Only critical issues block approval; everything else the standards
+     catch (direction, reuse, duplication, waste) is reported as non-blocking
+     findings. No generic summaries or style nits. A clean PR gets a short, concrete review rationale
      (or an approval when you're a requested reviewer); a bare `LGTM` is reserved for
      extremely simple, unambiguous changes. Current markers and your legacy approvals
      pinned to the current HEAD prevent needless re-review.

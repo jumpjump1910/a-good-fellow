@@ -64,7 +64,7 @@ validate_snapshot_file() {
   local lines
   validate_regular_file "$1" 'snapshot file'
   lines=$(wc -l < "$1" | tr -d ' ')
-  [ "$lines" -eq 11 ] || die "snapshot must contain exactly 11 lines, found $lines"
+  [ "$lines" -eq 13 ] || die "snapshot must contain exactly 13 lines, found $lines"
 }
 
 QUERY='query($o:String!,$r:String!,$n:Int!){
@@ -155,12 +155,22 @@ QUERY='query($o:String!,$r:String!,$n:Int!){
 # gh embeds gojq, so this adds no external jq dependency. The first five lines
 # are fixed metadata, lines six through eight are machine approval predicates, line
 # nine is the stable external-state token (a sha-256 digest), line ten is the
-# complete review ledger, and line eleven is the pre-stable-token digest accepted
-# only for migration. The token inputs deliberately strip the viewer's own
+# complete review ledger, line eleven is the pre-stable-token digest accepted
+# only for migration, and line twelve is the external item index: one
+# `kind|id|author|created|updated` entry per stable conversation item, so a token
+# mismatch can name exactly which comment/review/thread changed instead of leaving
+# the caller to guess that only HEAD moved. Line thirteen lists the node IDs of
+# every issue/thread comment the viewer has not marked seen (👀), excluding the
+# viewer's own marker posts and minimized comments, or `-` when none remain; a
+# clean outcome refuses while any remain, because approving past a comment that
+# was never judged is exactly how a user's own open concern got overridden. The
+# token inputs deliberately strip the viewer's own
 # good-fellow:v1 marker reviews/comments so posting a marker does not invalidate
 # its own token; snapshot_state hashes those filtered captures before writing the
 # file, so only the digests exist on lines nine/eleven and the sole readable PR
-# JSON is the complete ledger on line ten (the `ledger` subcommand).
+# JSON is the complete ledger on line ten (the `ledger` subcommand). The index
+# covers the same filtered items as the token, so the viewer's own marker posts
+# never appear as changes.
 FILTER='
 .data.viewer.login as $viewer |
 .data.repository as $repo |
@@ -382,6 +392,28 @@ else
         "\(.checkSuite.databaseId):\(.checkSuite.workflowRun.databaseId)"
       ] | unique | sort |
       if length == 0 then "-" else join(",") end
+    ),
+    (
+      $external.pullRequest as $x |
+      [
+        "pr|\($x.id)|\($x.author // "-")|\($x.createdAt)|\($x.lastEditedAt // "-")",
+        ($x.reviews[] | "review|\(.id)|\(.author // "-")|\(.submittedAt // "-")|\(.lastEditedAt // .updatedAt // "-")"),
+        ($x.comments[] | "comment|\(.id)|\(.author // "-")|\(.createdAt)|\(.lastEditedAt // .updatedAt // "-")"),
+        ($x.reviewThreads[] |
+          "thread|\(.id)|\(.resolvedBy // "-")|resolved=\(.isResolved)|outdated=\(.isOutdated)",
+          (.comments[] | "thread-comment|\(.id)|\(.author // "-")|\(.createdAt)|\(.lastEditedAt // .updatedAt // "-")")),
+        ($x.reviewDismissals[] | "dismissal|\(.id)|\(.actor // "-")|\(.createdAt)|-")
+      ] | map(gsub("\\s"; "_")) | sort | join(" ")
+    ),
+    (
+      $full.pullRequest as $f |
+      [
+        ($f.comments[], $f.reviewThreads[].comments[]) |
+        select(.seen | not) |
+        select(.isMinimized | not) |
+        select((.author != $viewer) or (((.body // "") | contains("good-fellow:v1")) | not)) |
+        .id
+      ] | sort | if length == 0 then "-" else join(",") end
     )
   ] | .[])
 end'
@@ -411,7 +443,7 @@ snapshot_state() {
   fi
 
   lines=$(wc -l < "$SNAPSHOT_CORE_TEMP" | tr -d ' ')
-  [ "$lines" -eq 13 ] || die "internal snapshot must contain exactly 13 lines, found $lines"
+  [ "$lines" -eq 15 ] || die "internal snapshot must contain exactly 15 lines, found $lines"
   head=$(sed -n '1p' "$SNAPSHOT_CORE_TEMP")
   base=$(sed -n '2p' "$SNAPSHOT_CORE_TEMP")
   strict_clean=$(sed -n '6p' "$SNAPSHOT_CORE_TEMP")
@@ -478,17 +510,19 @@ snapshot_state() {
     fi
   fi
 
-  # Emit the 11-line snapshot. The filtered token inputs on internal lines 9/11
+  # Emit the 13-line snapshot. The filtered token inputs on internal lines 9/11
   # are reduced to their sha-256 digests here so the only readable PR JSON in
   # the file is the complete ledger on line 10 — a consumer can no longer grab
-  # a filtered capture by mistake.
+  # a filtered capture by mistake. Internal lines 12/13 feed only the CI
+  # fallback above; internal lines 14/15 become the item index and unseen list
+  # on lines 12/13.
   local out_line line_no=0
   while IFS= read -r out_line; do
     line_no=$((line_no + 1))
-    [ "$line_no" -le 11 ] || break
     case "$line_no" in
       6) printf '%s\n' "$ci_clean" ;;
       9|11) digest_string "$out_line" ;;
+      12|13) ;;
       *) printf '%s\n' "$out_line" ;;
     esac
   done < "$SNAPSHOT_CORE_TEMP"
@@ -558,6 +592,43 @@ snapshot_ledger() {
   snapshot_line "$1" 10
 }
 
+# Print, to stderr, every reason the stable state differs between two snapshots.
+# A HEAD move and a new comment both change the token; naming each item keeps a
+# caller from restarting only the code review and missing later conversation.
+describe_external_change() {
+  local old=$1 new=$2 old_head old_base new_head new_base old_index new_index listed
+  old_head=$(snapshot_head "$old"); new_head=$(snapshot_head "$new")
+  old_base=$(snapshot_base "$old"); new_base=$(snapshot_base "$new")
+  [ "$old_head" = "$new_head" ] || printf 'pr-review-guard: changed: HEAD %s -> %s\n' "$old_head" "$new_head" >&2
+  [ "$old_base" = "$new_base" ] || printf 'pr-review-guard: changed: base %s -> %s\n' "$old_base" "$new_base" >&2
+  old_index=$(snapshot_line "$old" 12)
+  new_index=$(snapshot_line "$new" 12)
+  # The indexes go through stdin, not `-v`: a single exec argument is capped at
+  # 128 KiB, and an E2BIG exit would replace this function's exit-3 contract.
+  listed=$(printf '%s\n%s\n' "$old_index" "$new_index" | LC_ALL=C awk '
+    NR == 1 { old = $0; next }
+    NR == 2 { new = $0; next }
+    END {
+      n = split(old, o, " "); for (i = 1; i <= n; i++) { split(o[i], f, "|"); seen[o[i]] = 1; oid[f[2]] = 1 }
+      m = split(new, w, " ")
+      for (i = 1; i <= m; i++) {
+        split(w[i], f, "|"); nid[f[2]] = 1
+        if (w[i] in seen) continue
+        printf "pr-review-guard: changed: %s %s %s by %s at %s\n", (f[2] in oid ? "edited" : "new"), f[1], f[2], f[3], f[4]
+      }
+      for (i = 1; i <= n; i++) {
+        split(o[i], f, "|")
+        if (!(f[2] in nid)) printf "pr-review-guard: changed: removed %s %s by %s\n", f[1], f[2], f[3]
+      }
+    }')
+  if [ -n "$listed" ]; then
+    printf '%s\n' "$listed" >&2
+  elif [ "$(snapshot_token "$old")" != "$(snapshot_token "$new")" ]; then
+    printf 'pr-review-guard: changed: other stable PR fields (title, assignees, or minimized items)\n' >&2
+  fi
+  printf 'pr-review-guard: restart this PR from the fresh snapshot and judge every changed item above\n' >&2
+}
+
 # CI and synthetic merge state are live gates. Callers that need a clean
 # outcome read the freshly captured predicates after this stable-state check.
 verify_external_state() {
@@ -584,6 +655,7 @@ verify_external_state() {
     return 0
   fi
   printf 'pr-review-guard: pull request external state changed during review\n' >&2
+  describe_external_change "$baseline" "$VERIFY_TEMP"
   return 3
 }
 
@@ -706,6 +778,11 @@ case "$mode" in
       [ "$ci_clean" = true ] || die 'clean comment requires conclusively successful CI'
       [ "$threads_clean" = true ] || die 'clean comment requires all review threads resolved'
       [ "$dismissal_clear" = true ] || die 'clean comment cannot override a current-head dismissed approval'
+    fi
+    # Approval (always clean) and a clean comment both assert nothing is left open.
+    if [ "$BODY_VERDICT" = clean ]; then
+      unseen=$(snapshot_line "$VERIFY_TEMP" 13)
+      [ "$unseen" = - ] || die "clean outcome requires every comment judged and marked seen; unseen: $unseen"
     fi
     if enforce_stop_epoch; then :; else status=$?; exit "$status"; fi
     # No GitHub or code reads are allowed between the successful verification
