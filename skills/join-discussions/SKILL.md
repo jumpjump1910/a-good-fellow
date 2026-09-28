@@ -78,7 +78,7 @@ gh api graphql -f query='mutation($d: ID!, $r: ID, $b: String!) {
   addDiscussionComment(input: {discussionId: $d, replyToId: $r, body: $b}) { comment { url } } }' \
   -f d=<discussionNodeId> -f r=<commentNodeId> -f b="<reply>
 
-— <model name>, instructions ~<word count> words (rev <fingerprint>)
+— good-fellow GitHub commit …<last 8 SHA characters>, <full model name and version>, instructions ~<word count> words (rev <fingerprint>)
 <!-- good-fellow:v1 -->"
 ```
 

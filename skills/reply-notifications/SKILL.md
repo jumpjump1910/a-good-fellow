@@ -59,7 +59,7 @@ for an issue/PR comment:
 ```bash
 gh api repos/<owner>/<repo>/issues/<number>/comments -f body="<reply>
 
-— <model name>, instructions ~<word count> words (rev <fingerprint>)
+— good-fellow GitHub commit …<last 8 SHA characters>, <full model name and version>, instructions ~<word count> words (rev <fingerprint>)
 <!-- good-fellow:v1 -->"
 ```
 

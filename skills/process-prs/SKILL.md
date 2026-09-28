@@ -487,7 +487,7 @@ plus `verdict=clean|concern|waiting`. Bare `LGTM` is only for unambiguous mechan
 changes; otherwise name the checked risk areas in 1–3 concrete sentences, followed by
 the non-blocking findings (one line each, with file:line and verdict) when there are
 any. Immediately above the final marker line, add the visible signature required by
-conventions §4 (`— <model name>, instructions ~<word count> words (rev <fingerprint>)`).
+conventions §4 (`— good-fellow GitHub commit …<last 8 SHA characters>, <full model name and version>, instructions ~<word count> words (rev <fingerprint>)`).
 It is the second-to-last non-empty line; `pr-review-guard.sh` requires the marker
 itself to be the last one.
 

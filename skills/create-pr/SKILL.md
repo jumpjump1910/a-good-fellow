@@ -161,7 +161,7 @@ Body structure (language per gist / repo norms):
 - How it was verified — tests run, or honest "not tested" note.
 - `Fixes #<n>` when an issue number was given.
 - The visible signature line, then the marker line (conventions §4):
-  `— <model name>, instructions ~<word count> words (rev <fingerprint>)` followed by
+  `— good-fellow GitHub commit …<last 8 SHA characters>, <full model name and version>, instructions ~<word count> words (rev <fingerprint>)` followed by
   `<!-- good-fellow:v1 -->`.
 
 No boilerplate beyond that; do not enable auto-merge; do not request reviewers unless
