@@ -220,7 +220,9 @@ Requirements the generated script must satisfy:
 - **PATH**: cron strips the environment — rebuild a PATH covering `$HOME/.local/bin`,
   `/opt/homebrew/bin`, `/usr/local/bin`, and the system dirs.
 - **Auth checks**: `gh auth status` must pass; agent CLI auto-detect in the order
-  claude → codex → cursor-agent (overridable via `GOOD_FELLOW_AGENT`).
+  claude → codex → cursor-agent (`GOOD_FELLOW_AGENT` selects the first attempt).
+  Any unsuccessful attempt falls back to an untried available CLI while the shared
+  deadline leaves enough time. Do not classify error text to decide whether to retry.
 - **Workspace access**: the sweeps clone into `~/<repo>` and use
   `~/.good-fellow/worktrees/`, both outside the runner's working directory. Grant
   access explicitly (`claude --add-dir "$HOME"`), otherwise those writes are blocked
@@ -389,9 +391,8 @@ if [ -x "$MAINTENANCE_TOOL" ]; then
   esac
 fi
 
-# Availability is a function rather than a one-shot if/elif chain because a usage
-# quota can retire the preferred CLI mid-tick, and the fallback below has to ask the
-# same question again about a different candidate.
+# Availability is checked for each candidate; credentials being present do not
+# prove that an agent will actually complete the sweep.
 agent_available() {
   case "$1" in
     claude) command -v claude >/dev/null 2>&1 &&
@@ -467,38 +468,34 @@ run_agent() {
   esac
 }
 
-# A usage quota is the one agent failure worth retrying on a different CLI: the sweep
-# is re-entrant (every marker is posted only after the action it records succeeded),
-# and a quota rejection costs seconds, so the tick still has nearly its whole budget.
-# Timeouts are excluded on purpose — that work already spent the budget and a rerun
-# would only time out again. The output is teed because the exit code alone cannot
-# tell a quota rejection apart from any other agent error.
-agent_hit_quota() {
-  grep -Eqi "(reached|hit) your [^.]*limit|usage limit reached" "$1"
-}
-
-cd "$REPO_DIR"; STATUS=0
-AGENT_OUT="$STATE_DIR/.agent-output"   # single writer: this run already holds the lock
-run_agent "$AGENT" 2>&1 | tee "$AGENT_OUT" 9>&- || STATUS=$?
-
-# An explicit GOOD_FELLOW_AGENT pin outranks the fallback; only auto-selection rotates.
-if [ -z "${GOOD_FELLOW_AGENT:-}" ]; then
-  for AGENT_CANDIDATE in claude codex cursor; do
-    case "$STATUS" in 0|124|137) break ;; esac
-    agent_hit_quota "$AGENT_OUT" || break
-    if [ "$AGENT_CANDIDATE" = "$AGENT" ] || ! agent_available "$AGENT_CANDIDATE"; then continue; fi
-    REMAINING=$((GOOD_FELLOW_RUN_DEADLINE_EPOCH - $(date +%s)))
+# Retry unsuccessful attempts regardless of their error text. The sweeps are
+# re-entrant: resume their durable queue/handoffs and check existing marked outcomes
+# before writing. Every CLI gets at most one attempt, including an explicit preference.
+cd "$REPO_DIR"
+STATUS=1
+ATTEMPTED=" "
+for AGENT_CANDIDATE in "$AGENT" claude codex cursor; do
+  case "$ATTEMPTED" in *" $AGENT_CANDIDATE "*) continue ;; esac
+  # Try the explicitly selected first agent even if availability detection would
+  # reject it, then let failure fall through to the remaining available CLIs.
+  if [ "$ATTEMPTED" != " " ] && ! agent_available "$AGENT_CANDIDATE"; then continue; fi
+  REMAINING=$((GOOD_FELLOW_RUN_DEADLINE_EPOCH - $(date +%s)))
+  if [ "$ATTEMPTED" != " " ]; then
     if [ "$REMAINING" -le $((GOOD_FELLOW_MIN_REVIEW_SECONDS + 120)) ]; then
-      log "$AGENT hit a usage quota; ${REMAINING}s left is too little to restart; rolls to next tick"
+      log "$AGENT failed (status $STATUS); ${REMAINING}s left is too little to restart; rolls to next tick"
       break
     fi
-    log "$AGENT hit a usage quota; falling back to $AGENT_CANDIDATE with ${REMAINING}s left"
-    TIMEOUT_CMD=$(timeout_cmd_for "$REMAINING")
-    AGENT=$AGENT_CANDIDATE; STATUS=0
-    run_agent "$AGENT" 2>&1 | tee "$AGENT_OUT" 9>&- || STATUS=$?
-  done
+    log "$AGENT failed (status $STATUS); falling back to $AGENT_CANDIDATE with ${REMAINING}s left"
+  fi
+  ATTEMPTED="$ATTEMPTED$AGENT_CANDIDATE "
+  TIMEOUT_CMD=$(timeout_cmd_for "$REMAINING")
+  AGENT=$AGENT_CANDIDATE; STATUS=0
+  run_agent "$AGENT" || STATUS=$?
+  [ "$STATUS" -ne 0 ] || break
+done
+if [ "$STATUS" -ne 0 ]; then
+  log "sweep incomplete after attempts:$ATTEMPTED(status $STATUS); remaining work rolls to next tick"
 fi
-rm -f "$AGENT_OUT"
 
 if [ "$STATUS" = 124 ] || [ "$STATUS" = 137 ]; then
   log "hit the ${MAX_RUNTIME}s timeout; rest rolls to next tick"

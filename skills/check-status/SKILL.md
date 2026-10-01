@@ -69,8 +69,9 @@ Classify each run by its final line:
 | `previous run still going (holder N, Ns); skipping this tick` | normal only if a real run was in flight |
 | `ERROR: lock stuck for Ns ... reclaiming` | a leaked holder was cleaned up; the run then proceeded |
 | `hit the Ns timeout` | the sweep ran out of time; work rolls to the next tick |
-| `<agent> hit a usage quota; falling back to <other>` | the preferred CLI was out of quota; this tick continued on the next authenticated agent |
-| `<agent> hit a usage quota; Ns left is too little to restart` | the quota hit too late in the tick to rerun; work rolls to the next tick |
+| `<agent> failed (status N); falling back to <other>` | an unsuccessful attempt continued on the next available agent, regardless of error type |
+| `<agent> failed (status N); Ns left is too little to restart` | insufficient shared time remains for another attempt; work rolls to the next tick |
+| `sweep incomplete after attempts: ...` | all available attempts failed or time ran out; inspect the preceding errors |
 | `FATAL: gh not logged in` | GitHub credentials gone |
 | `FATAL: no authenticated agent CLI` | agent credentials gone |
 | `missing/invalid good-fellow deployment` | launcher pointer or selected deployment is absent/corrupt |
@@ -128,10 +129,11 @@ VERSION_RUNNER="$DEPLOY_DIR/run-good-fellow.sh"
 - **Model quota.** Repeated `done (status 1)` a couple of seconds into each tick, with
   a `reached your ... limit` line in the body, is a usage quota rather than an auth
   failure — `gh auth status` and the agent credentials will both look fine. Current
-  runners rotate to the next authenticated CLI when this happens, so a quota that
-  still stalls every tick means one of: no second agent is authenticated, the run
-  pinned `GOOD_FELLOW_AGENT` (an explicit pin deliberately outranks the fallback), or
-  the deployed runner predates the fallback. Suggest pinning a model that still has
+  runners rotate after any unsuccessful agent exit, including revoked credentials
+  and unknown errors, while enough time remains. `GOOD_FELLOW_AGENT` chooses the
+  first attempt, not an exclusive agent. Repeated failures mean no working fallback
+  is available, the time budget is exhausted, or the deployment predates this policy.
+  Suggest selecting a model that still has
   budget (`ANTHROPIC_MODEL=claude-opus-5` in `~/.good-fellow/env`, which the runner
   exports) and re-running `/onboard` if the runner is the stale part.
 - **Stale worktrees.** `ls ~/.good-fellow/worktrees/` piling up means runs are dying

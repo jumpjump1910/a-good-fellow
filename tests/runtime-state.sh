@@ -390,67 +390,95 @@ printf '%s\n' "$runner_output" | grep -Fx 'good-fellow dry run ok.' >/dev/null |
 printf '%s\n' "$runner_output" | grep -F 'done (status 0)' >/dev/null ||
   fail 'clamped runner did not finish cleanly'
 
-# A usage quota on the preferred CLI must rotate to the next authenticated agent
-# within the same tick, because the sweep is re-entrant and the quota rejection cost
-# almost none of the budget. Reuse the runner home, swapping in stubs per case.
+# Retry any unsuccessful agent, including an explicit preference. Stubs record
+# attempts and deadlines so a successful fallback cannot hide duplicate attempts
+# or a refreshed per-agent budget.
 mkdir -p "$runner_home/.codex"
 printf '{"stub":true}\n' > "$runner_home/.codex/auth.json"
-cat > "$runner_home/.local/bin/codex" <<'CODEX_STUB'
+export STUB_AGENT_ATTEMPTS="$TEMP_ROOT/agent-attempts"
+for agent in claude codex cursor-agent; do
+  cat > "$runner_home/.local/bin/$agent" <<'AGENT_STUB'
 #!/usr/bin/env bash
-printf 'good-fellow dry run ok.\n'
-CODEX_STUB
-cat > "$runner_home/.local/bin/claude" <<'CLAUDE_QUOTA_STUB'
-#!/usr/bin/env bash
-printf "You've reached your Fable limit. Switch to another model, or manage usage credits.\n"
-exit 1
-CLAUDE_QUOTA_STUB
-chmod +x "$runner_home/.local/bin/codex" "$runner_home/.local/bin/claude"
+agent=${0##*/}
+printf '%s %s\n' "$agent" "$GOOD_FELLOW_RUN_DEADLINE_EPOCH" >> "$STUB_AGENT_ATTEMPTS"
+case "$agent" in
+  claude) status=${STUB_CLAUDE_STATUS:-1} ;;
+  codex) status=${STUB_CODEX_STATUS:-0} ;;
+  cursor-agent) status=${STUB_CURSOR_STATUS:-0} ;;
+esac
+if [ "$status" -eq 0 ]; then printf 'good-fellow dry run ok.\n'
+else printf '%s\n' "${STUB_AGENT_ERROR:-unknown error}" >&2
+fi
+exit "$status"
+AGENT_STUB
+  chmod +x "$runner_home/.local/bin/$agent"
+done
 
-quota_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test \
-  GOOD_FELLOW_DRY_RUN=1 "$runner" 2>&1)
-printf '%s\n' "$quota_output" | grep -F 'falling back to codex' >/dev/null ||
-  fail 'quota on the preferred CLI did not fall back'
-printf '%s\n' "$quota_output" | grep -Fx 'good-fellow dry run ok.' >/dev/null ||
-  fail 'fallback agent did not reach the dry-run sentinel'
-printf '%s\n' "$quota_output" | grep -F 'done (status 0)' >/dev/null ||
-  fail 'fallback run did not finish cleanly'
-[ ! -e "$runner_home/.good-fellow/.agent-output" ] ||
-  fail 'agent output capture leaked after the run'
+for failure in quota revoked unknown silent timeout killed; do
+  failure_status=1
+  case "$failure" in
+    quota) failure_text="You've reached your Fable limit." ;;
+    revoked) failure_text='401 OAuth access token has been revoked.' ;;
+    unknown) failure_text='unexpected internal error' ;;
+    silent) failure_text='' ;;
+    timeout) failure_text=''; failure_status=124 ;;
+    killed) failure_text=''; failure_status=137 ;;
+  esac
+  : > "$STUB_AGENT_ATTEMPTS"
+  fallback_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test \
+    STUB_CLAUDE_STATUS="$failure_status" STUB_AGENT_ERROR="$failure_text" \
+    GOOD_FELLOW_DRY_RUN=1 "$runner" 2>&1)
+  printf '%s\n' "$fallback_output" | grep -F 'falling back to codex' >/dev/null ||
+    fail "$failure did not fall back to codex"
+  printf '%s\n' "$fallback_output" | grep -F 'done (status 0)' >/dev/null ||
+    fail "$failure fallback did not finish cleanly"
+  assert_eq "$(cut -d ' ' -f 1 "$STUB_AGENT_ATTEMPTS")" $'claude\ncodex'
+  assert_eq "$(cut -d ' ' -f 2 "$STUB_AGENT_ATTEMPTS" | sort -u | wc -l | tr -d ' ')" 1
+done
 
-# An explicit agent pin is the user's choice and outranks the fallback.
-pinned_status=0
-pinned_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test GOOD_FELLOW_AGENT=claude \
-  GOOD_FELLOW_DRY_RUN=1 "$runner" 2>&1) || pinned_status=$?
-assert_eq "$pinned_status" 1
-printf '%s\n' "$pinned_output" | grep -F 'falling back' >/dev/null &&
-  fail 'a pinned agent was rotated away'
-printf '%s\n' "$pinned_output" | grep -F 'done (status 1)' >/dev/null ||
-  fail 'pinned quota failure did not surface its status'
+# Preference affects order, never disables recovery. No agent may be retried.
+: > "$STUB_AGENT_ATTEMPTS"
+pinned_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test GOOD_FELLOW_AGENT=codex \
+  STUB_CODEX_STATUS=2 GOOD_FELLOW_DRY_RUN=1 "$runner" 2>&1)
+assert_eq "$(cut -d ' ' -f 1 "$STUB_AGENT_ATTEMPTS")" $'codex\nclaude\ncursor-agent'
+printf '%s\n' "$pinned_output" | grep -F 'done (status 0)' >/dev/null ||
+  fail 'preferred agent failure prevented recovery'
+
+# A successful first agent stops rotation immediately.
+: > "$STUB_AGENT_ATTEMPTS"
+HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test STUB_CLAUDE_STATUS=0 \
+  GOOD_FELLOW_DRY_RUN=1 "$runner" > "$TEMP_ROOT/success.out" 2>&1
+assert_eq "$(cut -d ' ' -f 1 "$STUB_AGENT_ATTEMPTS")" claude
+
+# Exhaustion remains a visible failure, with each available agent tried once.
+: > "$STUB_AGENT_ATTEMPTS"
+exhausted_status=0
+exhausted_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test \
+  STUB_CODEX_STATUS=2 STUB_CURSOR_STATUS=3 GOOD_FELLOW_DRY_RUN=1 \
+  "$runner" 2>&1) || exhausted_status=$?
+assert_eq "$exhausted_status" 3
+assert_eq "$(cut -d ' ' -f 1 "$STUB_AGENT_ATTEMPTS")" $'claude\ncodex\ncursor-agent'
+printf '%s\n' "$exhausted_output" | grep -F 'sweep incomplete after attempts:' >/dev/null ||
+  fail 'exhausted agents did not report unfinished work'
+
+# Skip a fallback without credentials and continue to the next candidate.
+mv "$runner_home/.codex/auth.json" "$runner_home/.codex/auth.saved"
+: > "$STUB_AGENT_ATTEMPTS"
+HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test GOOD_FELLOW_DRY_RUN=1 \
+  "$runner" > "$TEMP_ROOT/unavailable.out" 2>&1
+assert_eq "$(cut -d ' ' -f 1 "$STUB_AGENT_ATTEMPTS")" $'claude\ncursor-agent'
+mv "$runner_home/.codex/auth.saved" "$runner_home/.codex/auth.json"
 
 # Too little of the tick left to restart: report and roll forward, never half-run.
+: > "$STUB_AGENT_ATTEMPTS"
 short_status=0
 short_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test \
   GOOD_FELLOW_DRY_RUN=1 GOOD_FELLOW_MAX_RUNTIME=200 GOOD_FELLOW_MIN_REVIEW_SECONDS=190 \
   "$runner" 2>&1) || short_status=$?
 assert_eq "$short_status" 1
+assert_eq "$(cut -d ' ' -f 1 "$STUB_AGENT_ATTEMPTS")" claude
 printf '%s\n' "$short_output" | grep -F 'too little to restart' >/dev/null ||
-  fail 'late quota did not report the exhausted tick budget'
-printf '%s\n' "$short_output" | grep -F 'falling back' >/dev/null &&
-  fail 'late quota started a fallback it could not finish'
-
-# Any other agent error stays put: only a quota is safe and useful to retry elsewhere.
-cat > "$runner_home/.local/bin/claude" <<'CLAUDE_ERROR_STUB'
-#!/usr/bin/env bash
-printf 'unexpected internal error\n' >&2
-exit 1
-CLAUDE_ERROR_STUB
-chmod +x "$runner_home/.local/bin/claude"
-error_status=0
-error_output=$(HOME="$runner_home" CLAUDE_CODE_OAUTH_TOKEN=test \
-  GOOD_FELLOW_DRY_RUN=1 "$runner" 2>&1) || error_status=$?
-assert_eq "$error_status" 1
-printf '%s\n' "$error_output" | grep -F 'falling back' >/dev/null &&
-  fail 'a non-quota failure triggered an agent rotation'
+  fail 'failed attempt did not report the exhausted tick budget'
 
 # Run the exact deployment-retention block from onboard against controlled names.
 for suffix in 1 2 3 4 5; do

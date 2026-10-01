@@ -179,7 +179,10 @@ about any other agent you use and it will install there too.
 
 The agent that onboards you and the agent that runs the sweeps need not be the same:
 the runner auto-detects claude → codex → cursor-agent at each tick, and
-`GOOD_FELLOW_AGENT=codex` in `~/.good-fellow/env` pins it to one.
+`GOOD_FELLOW_AGENT=codex` in `~/.good-fellow/env` makes Codex the first choice.
+If an agent exits unsuccessfully, the runner tries the remaining available agents
+regardless of the error, until one succeeds or the shared time budget runs out.
+Each agent is attempted at most once per tick.
 
 Already set up this machine and just want the latest changes? See
 [Upgrading an already-onboarded machine](#upgrading-an-already-onboarded-machine)
