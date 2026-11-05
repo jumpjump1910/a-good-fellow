@@ -163,6 +163,14 @@ checkpoint below arrives. Ending a tick right after a `reviewing` save with minu
 left is the same scheduling defect: a large review or fix must use each tick's whole
 budget, or every later row starves while it crawls.
 
+Do not checkpoint early to reserve time for the skills that run after this one. The
+90-second checkpoint before `GOOD_FELLOW_RUN_STOP_AT_EPOCH`, plus the window between
+that stop time and the hard deadline, already covers their inventory and the final
+notification cleanup. Their deep work is not owed time out of this item: it follows
+its own floor and continues on a later tick. A sweep that
+saves `reviewing` several minutes before the checkpoint "to leave time for the other
+skills" has the same scheduling defect.
+
 There is no per-run deep-item quota. After one item completes, start the next whenever
 the same check passes. Once deep work starts, do not rush it because the queue is long;
 save a real partial handoff if time unexpectedly runs short. Subagents may inspect only

@@ -192,7 +192,8 @@ review floor still had time: `process-prs` must start the work and persist a han
 instead, so a runtime that keeps doing this predates that rule—suggest `/onboard`.
 The same defect shows up with a handoff: ticks that end a few minutes in, right after
 saving `reviewing`, with most of the budget unused (logs say the skill "requires"
-stopping once a review is saved mid-way). Compare each tick's start/`done` times with
+stopping once a review is saved mid-way, or that it "checkpointed early to leave time
+for the other skills"). Compare each tick's start/`done` times with
 `GOOD_FELLOW_MAX_RUNTIME`; `reviewing` should end a tick only at its 90-second checkpoint. Missing tools/services must instead be a `blocked` handoff, which keeps
 incomplete evidence and a queue row without forcing priority or counting as coverage.
 Report its prerequisite/probe/recovery action and whether later rows are moving;
