@@ -67,7 +67,7 @@ priority; it remains in the inventory and retries at its normal round-robin posi
 | completed clean `reviewed` work blocked only by pending/unknown CI or unresolved/conflicting mergeability | submit one visible gate-waiting comment; after a confirmed post clear the handoff, record `ci-waiting`, and advance |
 | fresh state no longer matches a handoff/review decision | clear handoff; recapture and restart this PR; do not advance |
 | incomplete review cannot proceed because a required environment/tool/service is unavailable | save `blocked`; clean up; advance without receipt; continue |
-| review is partially complete and remaining work can proceed | save `reviewing`; clean up; do not advance; break |
+| review or own-PR fix is partially complete and remaining work can proceed | save `reviewing` (an own-PR fix carries its uncommitted patch, §2A); clean up; do not advance; break |
 | review is complete but remaining time prevents submission | save `reviewed`; clean up; do not advance; break |
 | insufficient time to start the next deep item | do not save an empty handoff, receipt, or cursor; break |
 
@@ -147,6 +147,14 @@ if [ "$review_cutoff" -gt 0 ] && [ $((review_cutoff - $(date +%s))) -lt "$minimu
   break  # current row remains first next tick; no receipt or advance
 fi
 ```
+
+The floor is the only start gate. Never skip, defer, or break on a row because its
+review or fix *looks* too large for the remaining budget: a size estimate is the same
+prediction this skill forbids for the whole inventory. When the floor passes, start
+the deep work, make real progress, and persist it as a handoff before the cutoff—the
+next tick resumes it at row 1 with a full budget. A tick that ends with the floor
+still satisfied, its row neither finalized, advanced, nor handed off, and nothing
+visible on the PR is a scheduling defect, not a deferral.
 
 There is no per-run deep-item quota. After one item completes, start the next whenever
 the same check passes. Once deep work starts, do not rush it because the queue is long;
@@ -237,8 +245,31 @@ git -C ~/<repo> fetch origin "$HEAD_BRANCH:refs/good-fellow/base/$HEAD_BRANCH" -
    finalize `commented`. The release PR picks the fix up once it merges.
 
 Nothing pushes to `$HEAD_BRANCH`, and the detached-worktree push below never runs for
-such a PR. Failures and the time floor follow this section's normal rules: publish
-nothing, leave the row unadvanced, name the reason in the report.
+such a PR. Failures follow this section's normal rules: publish nothing, leave the row
+unadvanced, name the reason in the report. Running out of time is not a failure: save
+the partial fix as "Fixes larger than one tick" below describes.
+
+### Fixes larger than one tick
+
+An own-PR fix—pushed to the head branch, or built on a separate fix branch for a shared
+integration head—may need more than one tick. Persist it like a partial review instead
+of skipping the row or restarting from nothing each tick:
+
+- At the 90-second checkpoint (§1), with fix work still continuable, save `reviewing`
+  against the guarded snapshot. Reuse §2B Step 4's fixed payload keys: `findings` holds
+  each open item's verdict and remaining plan, `tests` the checks already run and their
+  results, and `evidence` the recorded base commit (the snapshot HEAD, or the fetched
+  head-branch tip for a separate fix branch) plus the uncommitted work as
+  `git diff --binary` text. If the patch would exceed the payload limit, store the plan
+  without it; the next tick redoes the edits from the plan. Never commit or push
+  partial work to carry progress.
+- On resume—forced to row 1 like any `reviewing` handoff—match it exactly as §2B Step 2
+  does, recreate the worktree at the recorded base, and `git apply --index` the patch.
+  A changed snapshot, a moved base the patch no longer applies to, or any apply
+  failure clears the handoff and restarts the item fresh; never hand-merge a stale
+  patch.
+- Ship only when every item is handled and the touched paths' checks pass, then
+  finalize as above and clear the handoff.
 
 "Nothing awaiting a reply" needs a rule for comments that @-mention a third party —
 another reviewer, `@copilot`, any bot. Such a comment still makes the latest feedback

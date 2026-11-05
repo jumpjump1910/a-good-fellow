@@ -186,7 +186,10 @@ because continuable partial work holds the cursor and must resume before later d
 work; if two appear, `reviewing-key` self-heals by keeping the newest and deleting
 the rest, so a persisting pair means the deployed runtime predates that fix. A `reviewing` handoff
 plus an unchanged cursor across several sufficiently long successful ticks means work
-is stuck. Missing tools/services must instead be a `blocked` handoff, which keeps
+is stuck. So does the same row ending several ticks early with no handoff, no advance,
+and nothing posted (logs say the fix or review was "too big for this run") while the
+review floor still had time: `process-prs` must start the work and persist a handoff
+instead, so a runtime that keeps doing this predates that rule—suggest `/onboard`. Missing tools/services must instead be a `blocked` handoff, which keeps
 incomplete evidence and a queue row without forcing priority or counting as coverage.
 Report its prerequisite/probe/recovery action and whether later rows are moving;
 repeated early exits on the same unavailable prerequisite with a `reviewing` handoff
