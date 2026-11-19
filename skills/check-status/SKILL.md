@@ -127,12 +127,13 @@ VERSION_RUNNER="$DEPLOY_DIR/run-good-fellow.sh"
   enough time", "too risky to rush", or "needs a longer run" while each run still had
   more than `GOOD_FELLOW_MIN_REVIEW_SECONDS` left—typically with `done (status 0)` a
   minute or two after the tick started and owed work rotated without a receipt—means
-  the agent invented its own time requirement. The floor is the only time gate, so
+  the agent invented its own time requirement. The floor is the only start gate, so
   this is a defect, not a capacity problem: raising `GOOD_FELLOW_MAX_RUNTIME` will not
-  fix it. Check whether the deployed runtime has process-prs' "The floor is the only
-  time gate" rule (re-run `/onboard` if not), and look in the scheduled agent's
-  memory (for Claude, `~/.claude/projects/*good-fellow-deploy*/memory/`) for a note
-  that records the deferral as a rule; offer to replace it with the current state.
+  fix it. §5 below covers the runtime side (suggest `/onboard` for a stale runtime).
+  Also look in the scheduled agent's memory (for Claude,
+  `~/.claude/projects/*good-fellow-deploy*/memory/`) for a note that records the
+  deferral as a rule—a long run of "deferred again" lines is the tell—and offer to
+  replace it with the current state.
 - **Credential expiry.** Claude OAuth refresh tokens expire roughly monthly; a run of
   `FATAL` lines starting on one date usually means a re-login is due
   (`claude setup-token`, then update `~/.good-fellow/env`).
@@ -196,7 +197,15 @@ because continuable partial work holds the cursor and must resume before later d
 work; if two appear, `reviewing-key` self-heals by keeping the newest and deleting
 the rest, so a persisting pair means the deployed runtime predates that fix. A `reviewing` handoff
 plus an unchanged cursor across several sufficiently long successful ticks means work
-is stuck. Missing tools/services must instead be a `blocked` handoff, which keeps
+is stuck. So does the same row ending several ticks early with no handoff, no advance,
+and nothing posted (logs say the fix or review was "too big for this run") while the
+review floor still had time: `process-prs` must start the work and persist a handoff
+instead, so a runtime that keeps doing this predates that rule—suggest `/onboard`.
+The same defect shows up with a handoff: ticks that end a few minutes in, right after
+saving `reviewing`, with most of the budget unused (logs say the skill "requires"
+stopping once a review is saved mid-way, or that it "checkpointed early to leave time
+for the other skills"). Compare each tick's start/`done` times with
+`GOOD_FELLOW_MAX_RUNTIME`; `reviewing` should end a tick only at its 90-second checkpoint. Missing tools/services must instead be a `blocked` handoff, which keeps
 incomplete evidence and a queue row without forcing priority or counting as coverage.
 Report its prerequisite/probe/recovery action and whether later rows are moving;
 repeated early exits on the same unavailable prerequisite with a `reviewing` handoff

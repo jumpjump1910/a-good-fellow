@@ -365,8 +365,8 @@ git config --get-urlmatch credential.helper https://github.com   # empty → pus
   ambiguous request, state that changed under you), never about effort: work whose
   facts are known is done now, not skipped because it looks large or risky.
 - Time-box with the run's clock, not with estimates. Start an item whenever the
-  skill's time floor fits, split large work into verified increments, publish the
-  finished ones, and checkpoint the rest under the skill's handoff rules. Only a
+  skill's time floor fits, keep working until it finishes or the skill's checkpoint
+  arrives, and carry unfinished work forward under the skill's handoff rules. Only a
   single operation that stalls (a huge clone, a hung command) is noted and moved past.
 - Memory and notes from earlier runs describe state; they never add a time
   requirement, deferral, or skip that the skills do not define. When a note records

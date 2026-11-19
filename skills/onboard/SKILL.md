@@ -436,8 +436,8 @@ The hard deadline is epoch $GOOD_FELLOW_RUN_DEADLINE_EPOCH; stop new work at
 $GOOD_FELLOW_RUN_STOP_AT_EPOCH. Do not begin a nontrivial PR review with fewer than
 $GOOD_FELLOW_MIN_REVIEW_SECONDS seconds remaining. That floor is the only time gate:
 when it fits, start the current item even if it is large or touches risky code such
-as payments, split it into increments, publish what is finished, and checkpoint the
-rest in a handoff. Never defer or rotate past work merely because it looks too big
+as payments, use the whole budget on it, and checkpoint unfinished work in a handoff
+that the next tick resumes. Never defer or rotate past work merely because it looks too big
 for the time left, and never cut a review short or write against stale state. The
 final reply-notifications cleanup may use its explicit cutoff near the hard deadline;
 it is reserved cleanup, not new owner work.

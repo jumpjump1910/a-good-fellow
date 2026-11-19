@@ -70,10 +70,9 @@ marker prevents duplicate review while the same gate remains.
 The full PR inventory uses a persistent fair queue and processes PRs one at a time.
 After each item, the next deep item starts only when the review-time floor still fits;
 otherwise the untouched tail stays queued rather than being bulk-skipped. That floor
-is the only time gate: a large or risky item is started anyway, split into verified
-increments, its finished parts published, and the rest checkpointed—never deferred
-because it looks too big for the time left. Interrupted
-work is handed off only with matching HEAD and guarded state. A malformed cursor is
+is the only time gate: a large or risky item is started anyway and checkpointed in a
+handoff when the clock runs out—never deferred because it looks too big for the time
+left. Interrupted work is handed off only with matching HEAD and guarded state. A malformed cursor is
 ignored and replaced on the next advance; malformed handoff entries are reported and
 skipped without disabling healthy queue rows. Owner sweeps emit
 short-lived coverage receipts; the final notification pass clears routed inbox entries
