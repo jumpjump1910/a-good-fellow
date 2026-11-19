@@ -123,6 +123,17 @@ VERSION_RUNNER="$DEPLOY_DIR/run-good-fellow.sh"
   or narrowing scope in the instruction gist. Current runners clamp values at or above
   the 20-minute cadence to 1199 seconds with a warning so an older `1800` setting does
   not brick the schedule.
+- **Self-imposed deferral.** The same row or issue reported tick after tick as "not
+  enough time", "too risky to rush", or "needs a longer run" while each run still had
+  more than `GOOD_FELLOW_MIN_REVIEW_SECONDS` left—typically with `done (status 0)` a
+  minute or two after the tick started and owed work rotated without a receipt—means
+  the agent invented its own time requirement. The floor is the only start gate, so
+  this is a defect, not a capacity problem: raising `GOOD_FELLOW_MAX_RUNTIME` will not
+  fix it. §5 below covers the runtime side (suggest `/onboard` for a stale runtime).
+  Also look in the scheduled agent's memory (for Claude,
+  `~/.claude/projects/*good-fellow-deploy*/memory/`) for a note that records the
+  deferral as a rule—a long run of "deferred again" lines is the tell—and offer to
+  replace it with the current state.
 - **Credential expiry.** Claude OAuth refresh tokens expire roughly monthly; a run of
   `FATAL` lines starting on one date usually means a re-login is due
   (`claude setup-token`, then update `~/.good-fellow/env`).

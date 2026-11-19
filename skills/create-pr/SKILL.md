@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Turn uncommitted changes in a working tree into a pull request - review the diff for bugs, write a clear commit, push the branch, and open a GitHub PR with a well-structured body and the good-fellow marker. Use when the user asks to create a PR, commit and open a pull request, or when another good-fellow skill has a finished fix to ship.
+description: Turn uncommitted changes, or commits ahead of the base, in a working tree into a pull request - review the diff for bugs, write a clear commit, push the branch, and open a GitHub PR with a well-structured body and the good-fellow marker. Use when the user asks to create a PR, commit and open a pull request, or when another good-fellow skill has a finished fix to ship.
 ---
 
 # Create PR
@@ -25,19 +25,26 @@ git branch --show-current
 - Refuse to run on the repo's default branch or on a branch the user checked out in
   their own working tree — this skill only ships branches created per conventions §3
   (`good-fellow/*`) or the user's explicit current branch when invoked manually.
-- Refuse if there are no changes.
+- Resolve `BASE` and fetch it into `refs/good-fellow/base/$BASE` exactly as §4's first
+  block does (§4 reuses it), then take the fork point:
+  `FORK=$(git -C <worktree> merge-base HEAD "refs/good-fellow/base/$BASE")`.
+  Commits already on the branch—tested increments a caller committed, possibly in an
+  earlier run—are changes too. Refuse only when the worktree is clean **and**
+  `git -C <worktree> rev-list --count "$FORK..HEAD"` is 0.
 
 ## 2. Self-review the diff
 
-Read the full `git diff` (plus untracked files). Check for: debug leftovers,
-accidental file inclusions (lockfiles, secrets, editor junk), broken imports, logic
-errors. Fix what you find. If a secret is staged, stop and report — never push it.
+Read the full branch diff, not just what is uncommitted: `git -C <worktree> diff
+"$FORK"` (committed increments plus working-tree edits) plus untracked files. Check
+for: debug leftovers, accidental file inclusions (lockfiles, secrets, editor junk),
+broken imports, logic errors. Fix what you find. If a secret is staged, stop and report — never push it.
 
 ## 3. Commit
 
-Group the changes into one commit (or a few logical ones) with a message in the
-repository's existing style (`git log --oneline -15` to sample). Subject line explains
-*why*, not just *what*. Commit only files related to the task.
+Skip this step when nothing is left uncommitted (the caller already committed every
+increment); otherwise group the changes into one commit (or a few logical ones) with a
+message in the repository's existing style (`git log --oneline -15` to sample).
+Subject line explains *why*, not just *what*. Commit only files related to the task.
 
 This skill runs unattended, so satisfy the commit preconditions in conventions §6
 first (identity resolvable, credential helper present) and **never invoke an editor** —

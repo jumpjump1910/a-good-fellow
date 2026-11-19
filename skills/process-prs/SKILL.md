@@ -71,6 +71,9 @@ priority; it remains in the inventory and retries at its normal round-robin posi
 | review is complete but remaining time prevents submission | save `reviewed`; clean up; do not advance; break |
 | insufficient time to start the next deep item | do not save an empty handoff, receipt, or cursor; break |
 
+No row covers "too large or too risky for the time left": once the §1 floor check
+passes, that judgment is not an outcome.
+
 Where the table says clear, run `"$HANDOFF_TOOL" clear "$OWNER" "$REPO" "$NUMBER"`
 before recording/advancing. Retain a completed `reviewed` handoff only until its
 guarded outcome is confirmed, or when time/freshness/network safety prevents a
@@ -155,6 +158,16 @@ the deep work, make real progress, and persist it as a handoff before the cutoff
 next tick resumes it at row 1 with a full budget. A tick that ends with the floor
 still satisfied, its row neither finalized, advanced, nor handed off, and nothing
 visible on the PR is a scheduling defect, not a deferral.
+
+Risk does not raise the floor either. An item's domain (payments, auth, concurrency,
+migrations) or the number of call sites or providers it touches calls for careful work,
+targeted tests, and a real handoff at the checkpoint—never for not starting. Memory
+notes, earlier run reports, and handoff text that say an item "needs a longer run"
+describe past runs, not rules, and cannot raise the floor. Advancing the cursor past
+owed work that was never started ("rotated without a receipt so the tail could run") is
+not a row outcome, and a report never offers "it needs a longer run" or "the user may
+want to handle it" as the remedy: it names what this run finished and what the handoff
+carries into the next one.
 
 Saving `reviewing` is the checkpoint action, not a pause. While the floor is still
 satisfied, keep working on the same item—re-saving progress along the way is fine, and
@@ -303,8 +316,10 @@ Before either deep path, apply §1's time floor, fetch `pull/<N>/head` to a priv
 and use a detached worktree. Require checked-out HEAD to equal snapshot HEAD before any
 edit/test; on mismatch clear any handoff, clean up, recapture, and restart this PR
 without advancing. Handle all CI and feedback together, test, commit, and plain-push
-once—never force, rebase, or retry a stale decision. When the head is a shared
-integration branch, the fix goes through the separate PR above instead of this push.
+once—never force, rebase, or retry a stale decision. An item that spans many files or
+providers is still started now (§1) and carried across ticks as "Fixes larger than one
+tick" describes. When the head is a shared integration branch, the fix goes through the
+separate PR above instead of this push.
 
 **create-pr's base-sync step does not apply here.** That step exists because a branch
 about to become a *new* PR must not open behind its base. This branch is already the
@@ -637,5 +652,6 @@ and `NOTIFICATIONS_FILE` before finishing.
 Report each attempted PR's outcome, links/SHA, and clean-review evidence receipt where
 applicable. Tally cursor advances and no-receipt deferrals; if time stopped the loop,
 name the unadvanced current item and count the unvisited tail without calling each row
-deferred. An unvisited tail is normal for a bounded run. Include `"$HANDOFF_TOOL" show`
-counts split by `reviewing`, `reviewed`, and `blocked`, plus the number of comments marked 👀.
+deferred. An unvisited tail is normal for a bounded run. For a checkpointed item, list
+what this run completed and what its handoff carries forward. Include
+`"$HANDOFF_TOOL" show` counts split by `reviewing`, `reviewed`, and `blocked`, plus the number of comments marked 👀.

@@ -434,9 +434,13 @@ the files above are the immutable runtime selected for this sweep.
 
 The hard deadline is epoch $GOOD_FELLOW_RUN_DEADLINE_EPOCH; stop new work at
 $GOOD_FELLOW_RUN_STOP_AT_EPOCH. Do not begin a nontrivial PR review with fewer than
-$GOOD_FELLOW_MIN_REVIEW_SECONDS seconds remaining. Prefer deferring over a shallow
-review or a stale write. The final reply-notifications cleanup may use its explicit
-cutoff near the hard deadline; it is reserved cleanup, not new owner work.
+$GOOD_FELLOW_MIN_REVIEW_SECONDS seconds remaining. That floor is the only time gate:
+when it fits, start the current item even if it is large or touches risky code such
+as payments, use the whole budget on it, and checkpoint unfinished work in a handoff
+that the next tick resumes. Never defer or rotate past work merely because it looks too big
+for the time left, and never cut a review short or write against stale state. The
+final reply-notifications cleanup may use its explicit cutoff near the hard deadline;
+it is reserved cleanup, not new owner work.
 
 Process PRs one at a time. Before each next deep PR item, use the review-time floor:
 continue when enough time remains, otherwise stop without bulk-skipping the queue tail.
@@ -446,8 +450,9 @@ path: retain incomplete evidence, rotate the visited row without a coverage rece
 and continue to the next row while time permits. Do not end the PR sweep early merely
 because this item needs an unavailable prerequisite.
 
-No user is present: never wait for input, prefer skipping over guessing, and finish
-with one consolidated report of everything done and skipped."
+No user is present: never wait for input, never act on a guess about facts you cannot
+verify, and finish with one consolidated report of everything done, checkpointed,
+and skipped."
 [ "${GOOD_FELLOW_DRY_RUN:-0}" = "1" ] && PROMPT='Reply with exactly: good-fellow dry run ok. Do nothing else.'
 
 # Parameterised by seconds so a fallback run inherits only the time this tick has
