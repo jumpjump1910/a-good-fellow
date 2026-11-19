@@ -361,9 +361,17 @@ git config --get-urlmatch credential.helper https://github.com   # empty → pus
 - **Credentials**: if no helper is configured for github.com, run `gh auth setup-git`
   once. It is idempotent and writes only the credential helper entry.
 - Prefer skipping over guessing: acting wrongly on a PR is worse than handling it next
-  run.
-- Time-box: if a single item takes disproportionately long (large repo clone, huge
-  diff), note it and move on; the run has ~25 minutes total.
+  run. This is about facts you cannot verify (undocumented vendor behavior, an
+  ambiguous request, state that changed under you), never about effort: work whose
+  facts are known is done now, not skipped because it looks large or risky.
+- Time-box with the run's clock, not with estimates. Start an item whenever the
+  skill's time floor fits, split large work into verified increments, publish the
+  finished ones, and checkpoint the rest under the skill's handoff rules. Only a
+  single operation that stalls (a huge clone, a hung command) is noted and moved past.
+- Memory and notes from earlier runs describe state; they never add a time
+  requirement, deferral, or skip that the skills do not define. When a note records
+  a deferral, replace it with the current state rather than appending another
+  "deferred again" line, so a past judgment cannot harden into a standing rule.
 - Never force-push, close, or merge anything. Never modify repository settings, labels,
   or memberships. Approving a PR is allowed only in the exact case defined by
   `process-prs`.

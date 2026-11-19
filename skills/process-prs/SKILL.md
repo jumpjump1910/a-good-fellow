@@ -68,8 +68,12 @@ priority; it remains in the inventory and retries at its normal round-robin posi
 | fresh state no longer matches a handoff/review decision | clear handoff; recapture and restart this PR; do not advance |
 | incomplete review cannot proceed because a required environment/tool/service is unavailable | save `blocked`; clean up; advance without receipt; continue |
 | review is partially complete and remaining work can proceed | save `reviewing`; clean up; do not advance; break |
+| own PR: the clock checkpoint arrived with owed items left | push completed commits and reply to the items they finish; save `reviewing` with the remaining items; clean up; do not advance; break |
 | review is complete but remaining time prevents submission | save `reviewed`; clean up; do not advance; break |
 | insufficient time to start the next deep item | do not save an empty handoff, receipt, or cursor; break |
+
+No row covers "too large or too risky for the time left": once the floor check in
+"The floor is the only time gate" below passes, that judgment is not an outcome.
 
 Where the table says clear, run `"$HANDOFF_TOOL" clear "$OWNER" "$REPO" "$NUMBER"`
 before recording/advancing. Retain a completed `reviewed` handoff only until its
@@ -169,6 +173,30 @@ before any command likely to run for a minute. When `review_cutoff > 0` and 90 s
 or less remain, stop at that safe checkpoint and persist the real handoff; do not rush
 to a verdict or start another operation.
 
+### The floor is the only time gate
+
+`GOOD_FELLOW_MIN_REVIEW_SECONDS` is the one answer to "is there time to start?". When
+the check above passes, start the current row's deep work now. Never replace it with a
+larger, self-estimated requirement: an item's size, its domain (payments, auth,
+concurrency, migrations), the number of call sites or providers it touches, or a guess
+that it "needs a longer run" is never a reason to skip, rotate, or defer it. Memory
+notes, earlier run reports, and handoff text that say an item needs more time describe
+past runs; they are not rules and cannot raise the floor. Risky code calls for careful
+work, targeted tests, and a real checkpoint when the clock runs out—never for not
+starting.
+
+Work that does not fit one run is split, not postponed. Break it into independently
+verifiable increments—one review item, one CI failure, one group of call sites—order
+them by severity, and finish as many as the clock allows. Completed increments are
+published in this run (§2A); the rest continues next tick from a `reviewing` handoff,
+which holds row 1 until the item is done. A row with owed work therefore leaves a tick
+in exactly one of four ways: a finalized outcome, a verified `blocked` prerequisite,
+the floor check failing before work began, or a checkpoint after real progress.
+Advancing the cursor past owed work that was never started ("rotated without a receipt
+so the tail could run") is not one of them. Neither is a report that offers "it needs
+a longer run" or "the user may want to handle it" as the remedy; the report names what
+this run finished and what the handoff carries into the next one.
+
 ## 2A. PR authored by the user — make it ready to merge
 
 A user-authored PR is ready only when effective CI is green, every thread is resolved,
@@ -256,9 +284,32 @@ proof the point is settled.
 Before either deep path, apply §1's time floor, fetch `pull/<N>/head` to a private ref,
 and use a detached worktree. Require checked-out HEAD to equal snapshot HEAD before any
 edit/test; on mismatch clear any handoff, clean up, recapture, and restart this PR
-without advancing. Handle all CI and feedback together, test, commit, and plain-push
-once—never force, rebase, or retry a stale decision. When the head is a shared
-integration branch, the fix goes through the separate PR above instead of this push.
+without advancing. Run `"$HANDOFF_TOOL" match` exactly as §2B Step 2 does; a matching
+`reviewing` handoff carries the items an earlier run completed and those still owed,
+so continue with the owed ones instead of starting over.
+
+List every owed item—concrete CI failures, unresolved threads, feedback awaiting a
+reply—and work through them one at a time in severity order: implement, run the checks
+for the touched paths, and commit that item before starting the next. An item that
+spans many files or providers is still one item to start now (§1); split it into
+committed sub-steps if it needs more than one. Push once, carrying every completed
+commit, when all items are done or the checkpoint below arrives—a plain push, never
+force, rebase, or retry a stale decision. One push per run keeps bots that review on
+every push from re-reviewing each increment. Then reply to and resolve only the items
+those commits finish. When the head is a shared integration branch, the fix goes
+through the separate PR above instead of this push.
+
+Recheck the clock after each item and before any command likely to run for a minute.
+When fewer than 180 seconds remain before `GOOD_FELLOW_RUN_STOP_AT_EPOCH`, start no
+further item: push the completed commits, post their replies, capture a fresh
+snapshot, and—if owed items remain—save `reviewing` against that post-push snapshot.
+Its payload uses the §2B Step 4 keys: `findings` lists every owed item as done (with
+commit SHA and reply id) or pending (with its partial analysis), and `evidence` holds
+what was learned. A half-finished, uncommitted item is never pushed; its `git diff` may
+be kept as `evidence.wip_patch`, and a resuming run uses it only after
+`git apply --check` succeeds on the exact handoff HEAD and the patch is re-read like
+new code—otherwise it is discarded. Do not advance; break. If nothing was completed,
+save the handoff with the analysis alone; real progress includes understanding.
 
 **create-pr's base-sync step does not apply here.** That step exists because a branch
 about to become a *new* PR must not open behind its base. This branch is already the
@@ -590,5 +641,6 @@ and `NOTIFICATIONS_FILE` before finishing.
 Report each attempted PR's outcome, links/SHA, and clean-review evidence receipt where
 applicable. Tally cursor advances and no-receipt deferrals; if time stopped the loop,
 name the unadvanced current item and count the unvisited tail without calling each row
-deferred. An unvisited tail is normal for a bounded run. Include `"$HANDOFF_TOOL" show`
+deferred. An unvisited tail is normal for a bounded run. For a checkpointed item, list
+what this run completed (commits, replies) and what its handoff carries forward. Include `"$HANDOFF_TOOL" show`
 counts split by `reviewing`, `reviewed`, and `blocked`, plus the number of comments marked 👀.
