@@ -30,9 +30,10 @@ Skills (each in `skills/<name>/SKILL.md`):
 - `process-prs` — fix feedback on the user's PRs (any fix — a comment to address, a
   bug, a CI failure — on a release PR whose head is a shared branch such as `dev` is
   made on a new branch cut from the latest `dev` and shipped as a separate PR into
-  `dev` via `create-pr`, never pushed to the head directly); review others' PRs (critical
-  issues when found; otherwise a concise, concrete rationale, with bare `LGTM` only
-  for extremely simple changes; fail closed on incomplete evidence or stale state,
+  `dev` via `create-pr`, never pushed to the head directly; a reported race is fixed as
+  its whole class, not one interleaving); review others' PRs (every critical issue of
+  a HEAD in one comment, grouped by the invariant they break; otherwise a concise,
+  concrete rationale, with bare `LGTM` only for extremely simple changes; fail closed on incomplete evidence or stale state,
   approve only when clean and review was requested, leave a visible HEAD-bound
   waiting outcome when external gates block approval, and persist fair round-robin
   progress plus HEAD/state-bound handoffs across bounded runs).

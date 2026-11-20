@@ -240,6 +240,15 @@ same infrastructure failure repeats, comment with the step/log evidence. Never i
 a code fix when the cause is unknown. Judge every unresolved reviewer/Copilot item on
 code: fix real issues, or reply with a concrete explanation; only then resolve it.
 
+Fix the class, not the reported instance. When an item reports a race, stale read, or
+check-then-act gap, name the invariant it breaks and walk every reader and writer of
+that state before editing; fix every interleaving the walk finds in the same push and
+list them in the reply. Enforce the invariant in one place rather than adding another
+flag, retry, or in-process set beside the last fix: each new piece of state opens its
+own window, and the review becomes one round per interleaving. When the same invariant
+comes back a second time on this PR, stop patching and rework the mechanism so it
+holds by construction, carried across ticks as "Fixes larger than one tick" describes.
+
 ### Fixes that cannot land on the head branch
 
 A PR whose head is a shared integration branch — a release/promotion PR such as
@@ -496,6 +505,13 @@ a real review once). Cross-check the changed-file list against the GitHub PR Fil
 API; a file that appears only in a two-dot diff is base drift, not a PR change, and
 must not be reported as a finding.
 
+The incremental range bounds what is reread line by line, not what is reasoned
+about. When the delta adds or changes shared state, a flag, a version, a retry, or an
+ordering—as a fix for a concurrency finding usually does—walk the whole mechanism
+that state belongs to at the new HEAD: every reader and writer, including files the
+delta did not touch, against each invariant on the ledger. A fix is verified when the
+invariant holds, not when the one reported interleaving is gone.
+
 A clean verdict requires all of:
 
 1. range provenance and `merge-base --is-ancestor` for incremental work;
@@ -506,6 +522,13 @@ A clean verdict requires all of:
 4. comparison with all prior concerns; and
 5. targeted tests or known exact-HEAD CI for the path. Runtime evidence that cannot be
    obtained leaves the review incomplete, never clean.
+
+A `concern` verdict owes items 1–4 as well: a blocker does not end the review. Finish
+the coverage over the whole range so the author gets every blocker this HEAD has in
+one comment; posting the first one and finding the next after its fix costs a full
+round per finding (a real PR took ten). If the 90-second checkpoint arrives first,
+save `reviewing` with the findings so far and continue next tick—never publish a
+partial concern.
 
 Two tiers of findings, both in scope. Blocking findings are critical correctness,
 data, security, compatibility, or concurrency issues; only these (plus unresolved
@@ -519,7 +542,7 @@ incomplete. State unverified behavior as a risk, never as fact (a code path only
 environment exercises, a key or config nobody has tested), and name changes that need
 an owner's business decision (prices, quotas, limits) rather than approving them
 silently. Summaries and style nits stay out. A publishable finding must be absent from
-the ledger.
+the ledger, except the non-convergence escalation below.
 
 Two checks are always part of that scope. When the PR fixes a defect pattern at
 some call sites, search the repository for the same pattern and state whether
@@ -528,6 +551,24 @@ describing the fix as complete without that search is an unproved claim. When th
 adds or relies on a regression test, confirm from scripts and workflow files that CI
 actually executes it; an empty search for its runner in the workflows is a finding to
 report, not a result to drop.
+
+A blocking finding about concurrency, ordering, stale state, or a check-then-act gap
+is one instance of a broken invariant, not the whole defect. State the invariant in
+one sentence ("a check result may act only on the credential version it checked"),
+walk every reader and writer of that state, and report every interleaving that breaks
+it in the same comment, grouped under the invariant. Where the code allows, name a fix
+that enforces it in one place (one conditional write, one versioned snapshot) rather
+than a guard per interleaving.
+
+When the ledger shows two earlier fix rounds under the same invariant and this HEAD
+breaks it again, the patches are not converging. Do not post the next interleaving as
+one more isolated finding: say so, list every remaining interleaving from the walk
+above, and make the structural change the blocking request. A recurrence proved at a
+new HEAD after a fix is not a ledger duplicate even though its root cause is recorded:
+the escalation is exempt from the ledger-absence rule and the duplicate filter in Step
+5, and it cites the earlier fix rounds (their HEADs and the interleavings each closed).
+Once posted, the escalation is itself on the ledger: do not repeat it for the same
+recurrence at the same HEAD.
 
 Depth is judged by coverage, not by clock time. Before a `clean` verdict on a PR that
 spans several modules, the payload's `evidence` must record, per changed module, what
@@ -613,8 +654,10 @@ conventions §4 (`— good-fellow GitHub commit …<last 8 SHA characters>, <ful
 It is the second-to-last non-empty line; `pr-review-guard.sh` requires the marker
 itself to be the last one.
 
-- New critical findings: one `verdict=concern` comment with file:line and a failing
-  scenario, minus ledger duplicates.
+- New critical findings: one `verdict=concern` comment carrying every blocker the
+  completed coverage found, each with file:line and a failing scenario, grouped by
+  invariant where they share one, minus ledger duplicates (a Step 3 non-convergence
+  escalation is not a duplicate).
 - No new finding but an unresolved critical concern: concise `verdict=waiting`, never
   clean/approve.
 - Completed clean code review blocked only by pending/unknown CI or unresolved/
