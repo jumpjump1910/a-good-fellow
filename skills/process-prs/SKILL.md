@@ -542,7 +542,7 @@ incomplete. State unverified behavior as a risk, never as fact (a code path only
 environment exercises, a key or config nobody has tested), and name changes that need
 an owner's business decision (prices, quotas, limits) rather than approving them
 silently. Summaries and style nits stay out. A publishable finding must be absent from
-the ledger.
+the ledger, except the non-convergence escalation below.
 
 Two checks are always part of that scope. When the PR fixes a defect pattern at
 some call sites, search the repository for the same pattern and state whether
@@ -563,7 +563,12 @@ than a guard per interleaving.
 When the ledger shows two earlier fix rounds under the same invariant and this HEAD
 breaks it again, the patches are not converging. Do not post the next interleaving as
 one more isolated finding: say so, list every remaining interleaving from the walk
-above, and make the structural change the blocking request.
+above, and make the structural change the blocking request. A recurrence proved at a
+new HEAD after a fix is not a ledger duplicate even though its root cause is recorded:
+the escalation is exempt from the ledger-absence rule and the duplicate filter in Step
+5, and it cites the earlier fix rounds (their HEADs and the interleavings each closed).
+Once posted, the escalation is itself on the ledger: do not repeat it for the same
+recurrence at the same HEAD.
 
 Depth is judged by coverage, not by clock time. Before a `clean` verdict on a PR that
 spans several modules, the payload's `evidence` must record, per changed module, what
@@ -651,7 +656,8 @@ itself to be the last one.
 
 - New critical findings: one `verdict=concern` comment carrying every blocker the
   completed coverage found, each with file:line and a failing scenario, grouped by
-  invariant where they share one, minus ledger duplicates.
+  invariant where they share one, minus ledger duplicates (a Step 3 non-convergence
+  escalation is not a duplicate).
 - No new finding but an unresolved critical concern: concise `verdict=waiting`, never
   clean/approve.
 - Completed clean code review blocked only by pending/unknown CI or unresolved/
